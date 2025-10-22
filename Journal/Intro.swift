@@ -6,11 +6,172 @@
 //
 
 import SwiftUI
-import AVFoundation
 import Combine
+import AVFoundation
 
-// MARK: - Model
-struct JournalNote: Identifiable, Codable, Equatable {
+// ===================================================
+// كل شيء داخل ملف واحد Intro.swift
+// تخزين بسيط بـ AppStorage (JSON)
+// ===================================================
+
+struct Intro: View {
+    // التخزين
+    @AppStorage("notes.v1") private var rawNotes: Data = Data()
+    @State private var items: [Item] = []
+
+    // حالة الواجهة
+    @State private var search = ""
+    @State private var editing: Item? = nil
+    @State private var showRecorder = false
+    @AppStorage("sortMode") private var sortMode = 1   // 0: Bookmark أولاً، 1: الأحدث أولاً
+
+    // البنفسجي #D4C8FF
+    private let accent = Color(red: 212/255, green: 200/255, blue: 255/255)
+
+    // الملاحظات المعروضة
+    private var displayed: [Item] {
+        var arr = items
+        if !search.isEmpty {
+            arr = arr.filter { $0.title.localizedCaseInsensitiveContains(search) ||
+                               $0.content.localizedCaseInsensitiveContains(search) }
+        }
+        if sortMode == 0 {
+            arr.sort { ($0.isBookmarked ? 0:1, $0.date) < ($1.isBookmarked ? 0:1, $1.date) }
+        } else {
+            arr.sort { $0.date > $1.date }
+        }
+        return arr
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(alignment: .firstTextBaseline) {
+                Text("Journal")
+                    .font(.system(size: 34, weight: .bold))
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 18) {
+                    Menu {
+                        Picker("Sort", selection: $sortMode) {
+                            Text("Sort by Bookmark").tag(0)
+                            Text("Sort by Entry Date").tag(1)
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    .menuIndicator(.hidden)
+
+                    Button { editing = Item(title: "", content: "") } label: {
+                        Image(systemName: "plus").font(.system(size: 17, weight: .semibold))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(.ultraThinMaterial, in: Capsule())   // Glass
+                .tint(.primary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            // Empty / List
+            if items.isEmpty && search.isEmpty {
+                VStack(spacing: 0) {
+                    Image("Splash page2")
+                        .resizable().scaledToFit()
+                        .frame(width: 150, height: 150)
+                    Text("Begin Your Journal")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(accent)
+                        .padding(.top, 20).padding(.bottom, 8)
+                    Text("Craft your personal diary, tap the\nplus icon to begin")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(displayed) { it in
+                        Card(it: it, accent: accent,
+                             onBookmark: { toggleBookmark(id: it.id) },
+                             onOpen: { editing = it })
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) { delete(it) } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+
+            // Search glass + mic
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass").font(.system(size: 18))
+                TextField("Search", text: $search)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                Button { showRecorder = true } label: {
+                    Image(systemName: "mic.fill").font(.system(size: 18))
+                }
+            }
+            .foregroundColor(.primary.opacity(0.9))
+            .frame(height: 52)
+            .padding(.horizontal, 16)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal, 20)
+            .padding(.bottom, 26)
+        }
+        .onAppear(perform: load)
+        .fullScreenCover(item: $editing) { it in
+            Editor(it: it, accent: accent) { saved in
+                upsert(saved)
+                editing = nil
+            } onCancel: { editing = nil }
+            .ignoresSafeArea(.keyboard)   // يضمن ظهور الكيبورد بدون قص الحواف
+        }
+        .sheet(isPresented: $showRecorder) {
+            RecorderSheet { url in
+                upsert(Item(title: "Voice note", content: "", audioURL: url))
+            }
+        }
+    }
+
+    // MARK: Persistence + Actions
+    private func load() {
+        guard !rawNotes.isEmpty,
+              let arr = try? JSONDecoder().decode([Item].self, from: rawNotes) else { return }
+        items = arr
+    }
+    private func save() {
+        if let data = try? JSONEncoder().encode(items) { rawNotes = data }
+    }
+    private func upsert(_ it: Item) {
+        if let i = items.firstIndex(where: { $0.id == it.id }) { items[i] = it }
+        else { items.insert(it, at: 0) }
+        save()
+    }
+    private func delete(_ it: Item) {
+        items.removeAll { $0.id == it.id }
+        save()
+    }
+    private func toggleBookmark(id: UUID) {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        items[i].isBookmarked.toggle()
+        save()
+    }
+}
+
+// MARK: - Item (نوع داخلي بسيط)
+private struct Item: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
     var content: String
@@ -33,376 +194,156 @@ struct JournalNote: Identifiable, Codable, Equatable {
     }
 }
 
-// MARK: - Store (UserDefaults)
-final class JournalStoreLocal: ObservableObject {
-    @Published var notes: [JournalNote] = [] { didSet { save() } }
-    private let key = "journal.notes.v1"
-
-    init() { load() }
-
-    func add(_ n: JournalNote) { notes.insert(n, at: 0) }
-    func update(_ n: JournalNote) { if let i = notes.firstIndex(where: {$0.id == n.id}) { notes[i] = n } }
-    func delete(_ n: JournalNote) { notes.removeAll { $0.id == n.id } }
-    func toggleBookmark(_ n: JournalNote) { if let i = notes.firstIndex(of: n) { notes[i].isBookmarked.toggle() } }
-
-    private func save() {
-        guard let data = try? JSONEncoder().encode(notes) else { return }
-        UserDefaults.standard.set(data, forKey: key)
-    }
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let arr  = try? JSONDecoder().decode([JournalNote].self, from: data) else { return }
-        notes = arr
-    }
-}
-
-// MARK: - Audio (separate voice-note)
-final class JournalAudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
-    @Published var isRecording = false
-    private var recorder: AVAudioRecorder?
-    private(set) var lastURL: URL?
-
-    func requestPermission(_ done: @escaping (Bool)->Void) {
-        AVAudioApplication.requestRecordPermission { ok in
-            DispatchQueue.main.async { done(ok) }
-        }
-    }
-    func start() throws {
-        let s = AVAudioSession.sharedInstance()
-        try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-        try s.setActive(true, options: .notifyOthersOnDeactivation)
-        let url = Self.fileURL()
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 44_100,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        let r = try AVAudioRecorder(url: url, settings: settings)
-        r.delegate = self
-        r.record()
-        recorder = r
-        lastURL = url
-        isRecording = true
-    }
-    func stop() {
-        recorder?.stop()
-        recorder = nil
-        isRecording = false
-        try? AVAudioSession.sharedInstance().setActive(false)
-    }
-    private static func fileURL() -> URL {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return dir.appendingPathComponent("rec_\(UUID().uuidString.prefix(8)).m4a")
-    }
-}
-
-// MARK: - Intro
-private enum SortMode: Int { case bookmarkFirst, entryDate }
-
-struct Intro: View {
-    @StateObject private var store = JournalStoreLocal()
-
-    @State private var search = ""
-    @State private var editingNote: JournalNote? = nil      // item binding = لا شاشة سوداء
-    @State private var showRecorder = false
-    @AppStorage("sortMode") private var sortModeRaw: Int = SortMode.entryDate.rawValue
-
-    private var sortMode: SortMode { SortMode(rawValue: sortModeRaw) ?? .entryDate }
-    private let accent = Color(red: 212/255, green: 200/255, blue: 255/255) // #D4C8FF
-
-    private var displayed: [JournalNote] {
-        var arr = store.notes
-        if !search.isEmpty {
-            arr = arr.filter { $0.title.localizedCaseInsensitiveContains(search) || $0.content.localizedCaseInsensitiveContains(search) }
-        }
-        switch sortMode {
-        case .bookmarkFirst: arr.sort { ($0.isBookmarked ? 0 : 1, $0.date) < ($1.isBookmarked ? 0 : 1, $1.date) }
-        case .entryDate:     arr.sort { $0.date > $1.date }
-        }
-        return arr
-    }
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.97).ignoresSafeArea()
-            VStack(spacing: 0) {
-
-                // Header
-                HStack {
-                    Text("Journal")
-                        .font(.system(size: 34, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.leading, 20)
-
-                    Spacer()
-
-                    HStack(spacing: 16) {
-                        Menu {
-                            Picker("Sort", selection: $sortModeRaw) {
-                                Text("Sort by Bookmark").tag(SortMode.bookmarkFirst.rawValue)
-                                Text("Sort by Entry Date").tag(SortMode.entryDate.rawValue)
-                            }
-                        } label: {
-                            Image(systemName: "line.3.horizontal.decrease")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                        .menuIndicator(.hidden)
-
-                        Button {
-                            editingNote = JournalNote(title: "", content: "", isBookmarked: false)
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .frame(height: 44)
-                    .padding(.horizontal, 16)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.trailing, 20)
-                }
-                .padding(.top, 12)
-
-                Spacer().frame(height: 80)
-
-                // List or Empty
-                if store.notes.isEmpty && search.isEmpty {
-                    EmptyStateView(accent: accent)
-                } else {
-                    List {
-                        ForEach(displayed) { n in
-                            Button { editingNote = n } label: {
-                                JournalCard(note: n, accent: accent)
-                            }
-                            .buttonStyle(.plain)
-                            .listRowBackground(Color.clear)
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) { store.delete(n) } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }.tint(.red)
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button { store.toggleBookmark(n) } label: {
-                                    Label("Mark", systemImage: n.isBookmarked ? "bookmark.slash" : "bookmark")
-                                }.tint(.purple)
-                            }
-                        }
-                    }
-                    .scrollContentBackground(.hidden)
-                }
-
-                Spacer()
-
-                // Search Glass + Mic
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 18))
-                    TextField("Search", text: $search)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                    Button { showRecorder = true } label: {
-                        Image(systemName: "mic.fill").font(.system(size: 18))
-                    }
-                }
-                .foregroundColor(.white.opacity(0.9))
-                .frame(height: 52)
-                .padding(.horizontal, 16)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.07), lineWidth: 1))
-                .padding(.horizontal, 20)
-                .padding(.bottom, 26)
-            }
-        }
-        .preferredColorScheme(.dark)
-        .dynamicTypeSize(.medium)
-
-        // Editor (item binding)
-        .fullScreenCover(item: $editingNote) { note in
-            JournalEditView(note: note) { saved in
-                if store.notes.contains(where: { $0.id == saved.id }) { store.update(saved) }
-                else { store.add(saved) }
-                editingNote = nil
-            } onCancel: {
-                editingNote = nil
-            }
-        }
-
-        // Voice note sheet (creates separate note)
-        .sheet(isPresented: $showRecorder) {
-            VoiceRecorderSheet { url in
-                store.add(JournalNote(title: "Voice note", content: "", audioURL: url))
-            }
-        }
-    }
-}
-
-// MARK: - Empty State
-private struct EmptyStateView: View {
+// MARK: - Card
+private struct Card: View {
+    let it: Item
     let accent: Color
-    var body: some View {
-        VStack(spacing: 0) {
-            Image("Splash page2")
-                .resizable().scaledToFit()
-                .frame(width: 150, height: 150)
-            Text("Begin Your Journal")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(accent)
-                .padding(.top, 20).padding(.bottom, 8)
-            Text("Craft your personal diary, tap the\nplus icon to begin")
-                .font(.system(size: 18, weight: .light))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .kerning(0.6).lineSpacing(1)
-                .padding(.top, 4)
-        }
-    }
-}
+    var onBookmark: () -> Void
+    var onOpen: () -> Void
 
-// MARK: - Card Cell
-private struct JournalCard: View {
-    let note: JournalNote
-    let accent: Color
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(note.title)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Text(note.date.formatted(date: .numeric, time: .omitted))
-                    .foregroundColor(.white.opacity(0.7))
-                    .font(.system(size: 14, weight: .semibold))
-                if !note.content.isEmpty {
-                    Text(note.content)
-                        .foregroundColor(.white)
-                        .font(.system(size: 15))
-                        .lineLimit(3)
+                Text(it.title).font(.system(size: 22, weight: .bold))
+                Text(it.date, style: .date)
+                    .font(.system(size: 14, weight: .semibold)).foregroundColor(.secondary)
+                if !it.content.isEmpty {
+                    Text(it.content).font(.system(size: 15)).lineLimit(3)
                 }
             }
+            .frame(maxWidth: .infinity, minHeight: 130, alignment: .leading)
             .padding(18)
-            .background(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-                    .overlay(RoundedRectangle(cornerRadius: 26).stroke(.white.opacity(0.08), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
-            )
-            if note.isBookmarked {
-                Image(systemName: "bookmark.fill")
-                    .foregroundColor(accent)
-                    .padding(14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 26))
+            .onTapGesture { onOpen() }
+
+            Button(action: onBookmark) {
+                Image(systemName: it.isBookmarked ? "bookmark.fill" : "bookmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(it.isBookmarked ? accent : .primary.opacity(0.9))
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Circle())
             }
+            .buttonStyle(.plain)
+            .padding(10)
         }
     }
 }
 
-// MARK: - Editor (X + purple ✓) + auto keyboard
-private struct JournalEditView: View {
-    @State var note: JournalNote
-    var onSave: (JournalNote) -> Void
+// MARK: - Editor (كيبورد تلقائي + Discard/Keep)
+private struct Editor: View {
+    @State var it: Item
+    let accent: Color
+    var onSave: (Item) -> Void
     var onCancel: () -> Void
 
-    @FocusState private var focus: Field?
-    private enum Field { case content }
+    @State private var original: Item = .init(title: "", content: "")
+    @State private var showDiscard = false
+    @FocusState private var focusTitle: Bool
+    @FocusState private var focusBody: Bool
+
+    private var hasChanges: Bool {
+        it.title.trimmingCharacters(in: .whitespacesAndNewlines) !=
+        original.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        || it.content != original.content
+    }
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.97).ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Button(role: .cancel) { onCancel() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    Spacer()
-                    Button {
-                        note.title = note.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        onSave(note)
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Color.purple, in: Circle())
-                    }
-                    .disabled(note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .opacity(note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+        VStack(alignment: .leading, spacing: 16) {
+            // شريط علوي
+            HStack {
+                Button { hasChanges ? (showDiscard = true) : onCancel() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
+                .buttonStyle(.plain)
 
-                TextField("Title", text: $note.title)
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.white)
+                Spacer()
 
-                Text(note.date.formatted(date: .numeric, time: .omitted))
-                    .foregroundColor(.white.opacity(0.7))
-                    .font(.system(size: 16, weight: .semibold))
-
-                TextEditor(text: $note.content)
-                    .font(.system(size: 17))
-                    .foregroundColor(.white)
-                    .scrollContentBackground(.hidden)
-                    .frame(maxHeight: .infinity)
-                    .focused($focus, equals: .content)
-
-                HStack {
-                    Image(systemName: note.isBookmarked ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(note.isBookmarked ? .purple : .white)
-                        .onTapGesture { note.isBookmarked.toggle() }
-                    Spacer()
+                Button {
+                    it.title = it.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onSave(it)
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(accent, in: Circle())
                 }
-                .padding(.vertical, 8)
+                .disabled(it.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(it.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+
+            // عنوان
+            TextField("Title", text: $it.title)
+                .font(.system(size: 32, weight: .bold))
+                .focused($focusTitle)
+
+            // التاريخ
+            Text(it.date, style: .date)
+                .font(.system(size: 16, weight: .semibold)).foregroundColor(.secondary)
+
+            // النص
+            TextEditor(text: $it.content)
+                .font(.system(size: 17))
+                .frame(maxHeight: .infinity)
+                .focused($focusBody)
         }
+        .padding(.horizontal, 20)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { focus = .content }
+            original = it
+            // نشغّل الكيبورد مباشرة
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusTitle = true
+            }
         }
-        .preferredColorScheme(.dark)
+        // يمنع سحب الشاشة إذا في تغييرات
+        .interactiveDismissDisabled(hasChanges)
+        // Dialog بنفس النمط: زر أحمر + زر رمادي
+        .confirmationDialog(
+            "Are you sure you want to discard changes on this journal?",
+            isPresented: $showDiscard,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) { onCancel() }
+            Button("Keep Editing", role: .cancel) { /* يرجع للتحرير */ }
+        }
+        .ignoresSafeArea(.keyboard) // يضمن ظهور الكيبورد بالكامل
     }
 }
 
-// MARK: - Voice Recorder Sheet
-private struct VoiceRecorderSheet: View {
+// MARK: - Recorder (اختياري)
+private struct RecorderSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var rec = JournalAudioRecorder()
-    @State private var fileURL: URL?
-    var onFinish: (URL) -> Void
+    @StateObject private var r = Rec()
+    @State private var url: URL?
+    var onUse: (URL) -> Void
 
     var body: some View {
         VStack(spacing: 18) {
             Text("Voice Recorder").font(.headline)
             HStack(spacing: 16) {
-                if rec.isRecording {
-                    Button { rec.stop(); fileURL = rec.lastURL } label: {
+                if r.isRecording {
+                    Button { r.stop(); url = r.fileURL } label: {
                         Label("Stop", systemImage: "stop.fill")
                     }.tint(.red)
                 } else {
                     Button {
-                        // في Preview نولّد ملف وهمي، في التشغيل نسجّل فعلي
-                        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
-                            let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dummy.m4a")
-                            try? Data([0]).write(to: tmp, options: .atomic)
-                            fileURL = tmp
-                        } else {
-                            rec.requestPermission { ok in
-                                guard ok else { return }
-                                do { try rec.start(); fileURL = rec.lastURL } catch { print(error) }
-                            }
-                        }
-                    } label: { Label("Record", systemImage: "circle.fill") }
-                    .tint(.green)
+                        do { try r.start(); url = r.fileURL } catch { print(error) }
+                    } label: {
+                        Label("Record", systemImage: "circle.fill")
+                    }.tint(.green)
                 }
                 Spacer()
                 Button {
-                    if let url = fileURL { onFinish(url); dismiss() }
+                    if let u = url { onUse(u); dismiss() }
                 } label: { Label("Use", systemImage: "checkmark") }
-                .disabled(fileURL == nil || rec.isRecording)
+                .disabled(url == nil || r.isRecording)
             }
             .padding(.horizontal)
         }
@@ -411,7 +352,36 @@ private struct VoiceRecorderSheet: View {
     }
 }
 
-// MARK: - Preview
-#Preview {
-    Intro()
+private final class Rec: NSObject, ObservableObject {
+    @Published var isRecording = false
+    private var recorder: AVAudioRecorder?
+    private(set) var fileURL: URL?
+
+    func start() throws {
+        let s = AVAudioSession.sharedInstance()
+        try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+        try s.setActive(true)
+        let u = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("rec_\(UUID().uuidString.prefix(8)).m4a")
+        let set: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 44100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+        let rec = try AVAudioRecorder(url: u, settings: set)
+        rec.record()
+        recorder = rec
+        fileURL = u
+        isRecording = true
+    }
+
+    func stop() {
+        recorder?.stop()
+        recorder = nil
+        isRecording = false
+        try? AVAudioSession.sharedInstance().setActive(false)
+    }
 }
+
+#Preview { Intro() }
