@@ -134,9 +134,7 @@ struct IntroUI: View {
                 }
             }
             .foregroundColor(.primary.opacity(0.9))
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 18)
+            .padding(.horizontal, 20) .frame(height: 48)
             .glassEffect(.clear .interactive()) // حسب طلبك
             .background(
                 RoundedRectangle(cornerRadius: 19, style: .continuous)
@@ -223,7 +221,7 @@ private struct Card: View {
             // كارد ممتد أكثر وعالي شوي
             .frame(maxWidth: .infinity, minHeight: 140, alignment: .leading)
             .padding(18)
-            .glassEffect(.clear .interactive())
+        
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
             .contentShape(RoundedRectangle(cornerRadius: 26))
             .onTapGesture { onOpen() }
