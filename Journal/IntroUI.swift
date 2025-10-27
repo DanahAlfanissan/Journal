@@ -20,14 +20,20 @@ struct IntroUI: View {
 
     private let accent = Color(red: 212/255, green: 200/255, blue: 255/255)
 
+    // المعروضة (فلترة + فرز)
     private var displayed: [IntroNote] {
         var arr = model.notes
         if !search.isEmpty {
-            arr = arr.filter { $0.title.localizedCaseInsensitiveContains(search) || $0.content.localizedCaseInsensitiveContains(search) }
+            arr = arr.filter {
+                $0.title.localizedCaseInsensitiveContains(search) ||
+                $0.content.localizedCaseInsensitiveContains(search)
+            }
         }
         if sortMode == 0 {
+            // المعلّمة أولاً ثم بالتاريخ
             arr.sort { ($0.isBookmarked ? 0:1, $0.date) < ($1.isBookmarked ? 0:1, $1.date) }
         } else {
+            // الأحدث أولاً
             arr.sort { $0.date > $1.date }
         }
         return arr
@@ -35,11 +41,15 @@ struct IntroUI: View {
 
     var body: some View {
         VStack(spacing: 0) {
+
             // MARK: Header
             HStack(alignment: .firstTextBaseline) {
                 Text("Journal")
                     .font(.system(size: 34, weight: .bold))
+
                 Spacer()
+
+                // أزرار الفلتر + الإضافة داخل كبسولة زجاجية
                 HStack(spacing: 18) {
                     Menu {
                         Picker("Sort", selection: $sortMode) {
@@ -60,12 +70,14 @@ struct IntroUI: View {
                     }
                 }
                 .padding(.horizontal, 14)
-                .frame(height: 44)
+                .frame(width: 104, height: 44)
+                .glassEffect(.clear .interactive())
                 .background(.ultraThinMaterial, in: Capsule())
                 .tint(.primary)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
+            .padding(.bottom, 6) // مسافة بسيطة تحت العنوان
 
             // MARK: Empty State or List
             if model.notes.isEmpty && search.isEmpty {
@@ -73,14 +85,24 @@ struct IntroUI: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    // مسافة واضحة بين الكبسولة العلوية وأول كارد
+                    Color.clear
+                        .frame(height: 10)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
                     ForEach(displayed) { it in
-                        Card(it: it, accent: accent,
-                             onBookmark: { model.toggleBookmark(id: it.id) },
-                             onOpen: { editing = it },
-                             onDelete: { toDelete = it; showDeleteAlert = true })
+                        Card(
+                            it: it,
+                            accent: accent,
+                            onBookmark: { model.toggleBookmark(id: it.id) },
+                            onOpen: { editing = it },
+                            onDelete: { toDelete = it; showDeleteAlert = true }
+                        )
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
-                        .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        // انسيتس صغيرة عشان الكارد يمتد أكثر (زي تصميمك)
+                        .listRowInsets(.init(top: 8, leading: 12, bottom: 8, trailing: 12))
                     }
                 }
                 .listStyle(.plain)
@@ -89,10 +111,13 @@ struct IntroUI: View {
 
             // MARK: Search + Mic
             HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").font(.system(size: 16))
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 17))
+
                 TextField("Search", text: $search)
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
+
                 Button {
                     if isRecording {
                         mic.stop()
@@ -109,13 +134,17 @@ struct IntroUI: View {
                 }
             }
             .foregroundColor(.primary.opacity(0.9))
-            .frame(height: 44)
-            .padding(.horizontal, 14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .frame(maxWidth: .infinity, minHeight: 48)
             .padding(.horizontal, 20)
             .padding(.bottom, 18)
+            .glassEffect(.clear .interactive()) // حسب طلبك
+            .background(
+                RoundedRectangle(cornerRadius: 19, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
         }
-        // MARK: Editor
+
+        // MARK: Editor (Full Screen)
         .fullScreenCover(item: $editing) { it in
             Editor(it: it, accent: accent) { saved in
                 model.upsert(saved)
@@ -125,14 +154,15 @@ struct IntroUI: View {
             }
             .ignoresSafeArea(.keyboard)
         }
+
         // MARK: Delete Confirm
         .alert(
             "Delete Journal?",
             isPresented: $showDeleteAlert,
             presenting: toDelete,
             actions: { it in
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) { model.delete(it) }
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) { model.delete(it) } // أحمر وكلامه أبيض
             },
             message: { _ in
                 Text("Are you sure you want to delete this journal?")
@@ -151,11 +181,13 @@ private struct EmptyState: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 150, height: 150)
+
             Text("Begin Your Journal")
                 .font(.system(size: 24, weight: .bold))
                 .foregroundColor(accent)
                 .padding(.top, 20)
                 .padding(.bottom, 8)
+
             Text("Craft your personal diary, tap the\nplus icon to begin")
                 .font(.system(size: 18, weight: .light))
                 .foregroundColor(.secondary)
@@ -177,17 +209,21 @@ private struct Card: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(it.title)
                     .font(.system(size: 22, weight: .bold))
+
                 Text(it.date, style: .date)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.secondary)
+
                 if !it.content.isEmpty {
                     Text(it.content)
                         .font(.system(size: 15))
                         .lineLimit(3)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 130, alignment: .leading)
+            // كارد ممتد أكثر وعالي شوي
+            .frame(maxWidth: .infinity, minHeight: 140, alignment: .leading)
             .padding(18)
+            .glassEffect(.clear .interactive())
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
             .contentShape(RoundedRectangle(cornerRadius: 26))
             .onTapGesture { onOpen() }
@@ -202,6 +238,7 @@ private struct Card: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(it.isBookmarked ? accent : .primary.opacity(0.9))
                     .padding(10)
+                    .glassEffect(.clear .interactive())
                     .background(.ultraThinMaterial, in: Circle())
             }
             .buttonStyle(.plain)
@@ -228,9 +265,12 @@ private struct Editor: View {
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.primary)
                         .padding(10)
+                        .glassEffect(.clear .interactive())
                         .background(.ultraThinMaterial, in: Circle())
                 }
+
                 Spacer()
+
                 Button {
                     it.title = it.title.trimmingCharacters(in: .whitespacesAndNewlines)
                     onSave(it)

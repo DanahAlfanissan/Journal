@@ -12,16 +12,11 @@ struct Splash: View {
 
     var body: some View {
         ZStack {
-            // الخلفية العامة (ثابتة لتجنب السواد)
-            LinearGradient(
-                colors: [Color.black, Color(red: 0.06, green: 0.06, blue: 0.08)],
-                startPoint: .top, endPoint: .bottom
-                
-            )
-            .ignoresSafeArea()
+            // خلفية تتبع النظام (فاتح / داكن)
+            Color(.systemBackground)
+                .ignoresSafeArea()
 
             if vm.showIntro {
-                // الانتقال السلس للصفحة التالية
                 IntroUI()
                     .transition(.opacity)
             } else {
@@ -33,15 +28,15 @@ struct Splash: View {
                         .scaledToFit()
                         .frame(width: 140, height: 140)
                         .scaleEffect(vm.animate ? 1.0 : 0.86)
-                        .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 6)
+                        .shadow(color: .black.opacity(0.25), radius: 16, x: 0, y: 6)
 
                     Text("Journali")
                         .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary) // يتغير تلقائياً حسب النظام
 
                     Text("Your thoughts, your story")
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
 
@@ -56,4 +51,6 @@ struct Splash: View {
     }
 }
 
-#Preview { NavigationStack { Splash() } }
+#Preview {
+    NavigationStack { Splash() }
+}

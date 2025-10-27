@@ -7,8 +7,7 @@
 
 
 import SwiftUI
-import Combine   // ← هذا هو اللي ناقص، ضيفيه
-
+import Combine
 @MainActor
 final class SplashViewModel: ObservableObject {
     @Published var showIntro = false
