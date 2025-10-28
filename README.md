@@ -1,6 +1,6 @@
-# 🪶 Journal App
+# 🪶 Journali App
 
-(Journal) is a SwiftUI-based journaling app created as part of the Apple Developer Academy project.  
+(Journali) is a SwiftUI-based journaling app created as part of the Apple Developer Academy project.  
 It helps users reflect, write, and capture their daily thoughts in a clean, minimal, and modern interface.
 
 ---
