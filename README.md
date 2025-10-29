@@ -42,11 +42,3 @@ It helps users reflect, write, and capture their daily thoughts in a clean, mini
 •⁠  ⁠Enable iCloud sync for journaling data.  
 •⁠  ⁠Add widget support for quick entries.  
 •⁠  ⁠Extend accessibility options and localization.
-
----
-
-## 👩🏻‍💻 Author
-
-Danah
-Apple Developer Academy — Riyadh, Princess Nourah University  
-Passionate about human-centered design and emotional journaling experiences.
