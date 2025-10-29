@@ -5,7 +5,10 @@ It helps users reflect, write, and capture their daily thoughts in a clean, mini
 
 ---
 
-## 📱 Features
+## 📱 Features<img width="590" height="1278" alt="IMG_0045" src="https://github.com/user-attachments/assets/ef4e49c0-f0c9-4e40-8bd0-68da74f0fd36" />
+<img width="590" height="1278" alt="IMG_0046" src="https://github.com/user-<img width="590" height="1278" alt="IMG_0047" src="https://github.com/user-attachments/assets/9a32e4b2-b1c4-4f9b-bb22-9c108bafc2df" />
+attachments/assets/ce2f2856-ed59-4f29-b0be-7a313473468f" />
+
 
 •⁠  ⁠*Splash Screen* — Smooth 3-second animated intro before the main interface loads.  
 •⁠  ⁠*Intro Page* — Shows app logo, tagline, and a guided transition into journaling.  
